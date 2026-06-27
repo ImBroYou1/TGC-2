@@ -12,59 +12,93 @@ echo -e "${BLUE}║   🖥️  Server Admin Bot Installer    ║${NC}"
 echo -e "${BLUE}╚══════════════════════════════════════╝${NC}"
 echo ""
 
-# Перевірка Python
-echo -e "${YELLOW}[1/5] Перевірка Python...${NC}"
-if command -v python3 &> /dev/null; then
-    PYTHON_VERSION=$(python3 --version | awk '{print $2}')
-    echo -e "${GREEN}✅ Python $PYTHON_VERSION знайдено${NC}"
-else
-    echo -e "${RED}❌ Python 3 не знайдено${NC}"
-    echo "Встановлюємо..."
-    if command -v pacman &> /dev/null; then
-        sudo pacman -S --noconfirm python python-pip
-    elif command -v apt &> /dev/null; then
-        sudo apt update && sudo apt install -y python3 python3-pip python3-venv
+# Пошук робочого Python
+echo -e "${YELLOW}[1/5] Пошук сумісного Python...${NC}"
+
+PYTHON_CMD=""
+
+# Перевіряємо python3.12
+if command -v python3.12 &> /dev/null; then
+    PYTHON_CMD="python3.12"
+# Перевіряємо python3.11
+elif command -v python3.11 &> /dev/null; then
+    PYTHON_CMD="python3.11"
+# Перевіряємо python3.10
+elif command -v python3.10 &> /dev/null; then
+    PYTHON_CMD="python3.10"
+# Перевіряємо python3
+elif command -v python3 &> /dev/null; then
+    VER=$(python3 -c "import sys; print(sys.version_info.minor)")
+    if [ "$VER" -le 12 ]; then
+        PYTHON_CMD="python3"
     else
-        echo -e "${RED}Не вдалося визначити пакетний менеджер. Встановіть Python вручну${NC}"
+        echo -e "${RED}Python 3.${VER} не підтримується. Встановлюємо Python 3.12...${NC}"
+        if command -v pacman &> /dev/null; then
+            sudo pacman -S --noconfirm python312
+            PYTHON_CMD="python3.12"
+        elif command -v apt &> /dev/null; then
+            sudo add-apt-repository -y ppa:deadsnakes/ppa 2>/dev/null || true
+            sudo apt update
+            sudo apt install -y python3.12 python3.12-venv python3.12-pip
+            PYTHON_CMD="python3.12"
+        fi
+    fi
+fi
+
+if [ -z "$PYTHON_CMD" ]; then
+    echo -e "${RED}Python не знайдено. Встановлюємо...${NC}"
+    if command -v pacman &> /dev/null; then
+        sudo pacman -S --noconfirm python312
+        PYTHON_CMD="python3.12"
+    elif command -v apt &> /dev/null; then
+        sudo add-apt-repository -y ppa:deadsnakes/ppa 2>/dev/null || true
+        sudo apt update
+        sudo apt install -y python3.12 python3.12-venv python3.12-pip
+        PYTHON_CMD="python3.12"
+    else
+        echo -e "${RED}Не вдалося встановити Python. Встановіть вручну.${NC}"
         exit 1
     fi
 fi
 
+echo -e "${GREEN}✅ Використовуємо: $($PYTHON_CMD --version)${NC}"
+
 # Встановлення системних залежностей
-echo -e "${YELLOW}[2/5] Встановлення системних залежностей...${NC}"
+echo -e "${YELLOW}[2/5] Системні залежності...${NC}"
 if command -v pacman &> /dev/null; then
     sudo pacman -S --needed --noconfirm netcat vnstat 2>/dev/null || true
 elif command -v apt &> /dev/null; then
     sudo apt install -y netcat-openbsd vnstat 2>/dev/null || true
 fi
+echo -e "${GREEN}✅ Готово${NC}"
+
+# Python середовище
+echo -e "${YELLOW}[3/5] Налаштування оточення...${NC}"
+rm -rf .venv
+$PYTHON_CMD -m venv .venv
+source .venv/bin/activate
+pip install --upgrade pip --quiet 2>/dev/null
+pip install -r requirements.txt --quiet
 echo -e "${GREEN}✅ Залежності встановлено${NC}"
 
-# Створення віртуального середовища
-echo -e "${YELLOW}[3/5] Налаштування Python середовища...${NC}"
-python3 -m venv .venv
-source .venv/bin/activate
-pip install --upgrade pip --quiet
-pip install -r requirements.txt --quiet
-echo -e "${GREEN}✅ Python залежності встановлено${NC}"
-
-# Налаштування конфігурації
-echo -e "${YELLOW}[4/5] Налаштування конфігурації...${NC}"
+# Конфігурація
+echo -e "${YELLOW}[4/5] Конфігурація...${NC}"
 if [ ! -f .env ]; then
     echo ""
-    echo -e "${BLUE}Введіть токен бота (отримати у @BotFather):${NC}"
+    echo -e "${BLUE}Токен бота (@BotFather):${NC}"
     read -p "> " BOT_TOKEN
     
     echo ""
-    echo -e "${BLUE}Введіть ваш Telegram Chat ID (отримати у @userinfobot):${NC}"
+    echo -e "${BLUE}Ваш Telegram ID (@userinfobot):${NC}"
     read -p "> " CHAT_ID
     
     echo ""
-    echo -e "${BLUE}Введіть пароль для доступу до бота:${NC}"
+    echo -e "${BLUE}Пароль для доступу:${NC}"
     read -sp "> " ADMIN_PASSWORD
     echo ""
     
     echo ""
-    echo -e "${BLUE}Назва сервера (напр: Home Server):${NC}"
+    echo -e "${BLUE}Назва сервера:${NC}"
     read -p "> " SERVER_NAME
     SERVER_NAME=${SERVER_NAME:-"My Server"}
     
@@ -75,18 +109,32 @@ ADMIN_PASSWORD=${ADMIN_PASSWORD}
 SERVER_NAME=${SERVER_NAME}
 EOF
     
-    echo -e "${GREEN}✅ .env файл створено${NC}"
+    echo -e "${GREEN}✅ .env створено${NC}"
 else
-    echo -e "${GREEN}✅ .env файл вже існує${NC}"
+    echo -e "${GREEN}✅ .env вже існує${NC}"
 fi
 
-# Створення директорій
 mkdir -p data temp
 
-# Налаштування systemd сервісу
+# Тестовий запуск
+echo -e "${YELLOW}[5/5] Перевірка...${NC}"
+echo -e "${BLUE}Запускаю тест на 5 секунд...${NC}"
+
+timeout 5 .venv/bin/python bot.py 2>&1 &
+TEST_PID=$!
+sleep 5
+kill $TEST_PID 2>/dev/null || true
+wait $TEST_PID 2>/dev/null || true
+
+if [ $? -le 1 ]; then
+    echo -e "${GREEN}✅ Бот запускається без помилок!${NC}"
+else
+    echo -e "${YELLOW}⚠️  Можливі проблеми, але продовжуємо...${NC}"
+fi
+
+# Systemd сервіс
 echo ""
-echo -e "${YELLOW}[5/5] Налаштування автозапуску...${NC}"
-echo -e "${BLUE}Встановити systemd сервіс для автозапуску? (y/n)${NC}"
+echo -e "${BLUE}Встановити автозапуск (systemd)? (y/n)${NC}"
 read -p "> " INSTALL_SERVICE
 
 if [ "$INSTALL_SERVICE" = "y" ] || [ "$INSTALL_SERVICE" = "Y" ]; then
@@ -116,32 +164,21 @@ EOF
     sudo systemctl enable server-bot
     
     echo ""
-    echo -e "${BLUE}Запустити бота зараз? (y/n)${NC}"
+    echo -e "${BLUE}Запустити зараз? (y/n)${NC}"
     read -p "> " START_NOW
     
     if [ "$START_NOW" = "y" ] || [ "$START_NOW" = "Y" ]; then
         sudo systemctl start server-bot
+        sleep 2
         echo -e "${GREEN}✅ Бот запущено${NC}"
         echo ""
         echo -e "${BLUE}Корисні команди:${NC}"
-        echo "  sudo systemctl status server-bot   - статус"
-        echo "  sudo systemctl restart server-bot  - перезапуск"
-        echo "  sudo systemctl stop server-bot     - зупинка"
-        echo "  sudo journalctl -u server-bot -f   - логи"
-    else
-        echo -e "${YELLOW}⚠️  Запустіть бота: sudo systemctl start server-bot${NC}"
+        echo "  sudo systemctl status server-bot"
+        echo "  sudo journalctl -u server-bot -f"
     fi
-else
-    echo -e "${YELLOW}⚠️  Пропускаємо встановлення сервісу${NC}"
-    echo ""
-    echo -e "${BLUE}Для запуску вручну:${NC}"
-    echo "  source .venv/bin/activate"
-    echo "  python bot.py"
 fi
 
 echo ""
 echo -e "${GREEN}╔══════════════════════════════════════╗${NC}"
 echo -e "${GREEN}║     ✅ Встановлення завершено!     ║${NC}"
 echo -e "${GREEN}╚══════════════════════════════════════╝${NC}"
-echo ""
-echo -e "${BLUE}Відправте /start вашому боту в Telegram${NC}"
