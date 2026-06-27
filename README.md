@@ -23,7 +23,7 @@ Telegram-бот для адміністрування Linux-серверів (Ar
 ## 🚀 Швидке встановлення
 
 ```bash
-git clone https://github.com/ImBroYou1/TGC-TG-bot
-cd tgcb
+git clone https://github.com/ImBroYou1/TGC-2.git
+cd TGC-2
 chmod +x install.sh
 ./install.sh
