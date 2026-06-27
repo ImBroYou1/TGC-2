@@ -1,0 +1,17 @@
+
+## .gitignore
+
+```gitignore
+.venv/
+venv/
+__pycache__/
+*.pyc
+.env
+.gitignore
+data/
+temp/
+*.log
+bot.log
+.DS_Store
+custom_services.json
+custom_commands.json
