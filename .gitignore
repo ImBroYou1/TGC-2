@@ -1,0 +1,14 @@
+
+## .gitignore
+
+```gitignore
+.venv/
+venv/
+__pycache__/
+*.pyc
+.env
+data/
+temp/
+*.log
+bot.log
+.DS_Store

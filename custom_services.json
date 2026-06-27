@@ -1,0 +1,7 @@
+{
+  "services": [
+    "sshd",
+    "smb",
+    "das"
+  ]
+}
